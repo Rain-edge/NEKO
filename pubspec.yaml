@@ -1,0 +1,50 @@
+name: neko
+description: "NEKO - 本地漫画存储与阅读器"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # 存储
+  objectbox: ^5.0.0
+  objectbox_flutter_libs: ^5.0.0
+  shared_preferences: ^2.5.4
+
+  # 文件与路径
+  path_provider: ^2.1.5
+  path: ^1.9.0
+  file_selector: ^1.1.0
+  archive: ^4.0.0
+
+  # UI
+  photo_view: ^0.15.0
+
+  # 工具
+  uuid: ^4.4.2
+  intl: ^0.20.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.0.0
+  objectbox_generator: ^5.0.0
+  flutter_launcher_icons: ^0.14.3
+
+objectbox:
+  output_dir: object_box
+
+flutter_launcher_icons:
+  android: true
+  image_path: "assets/icon.png"
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icon.png
