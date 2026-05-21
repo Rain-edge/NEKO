@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:935332529679388433",
-      "lastPropertyId": "12:1746572680421012554",
+      "lastPropertyId": "14:4376400276972104833",
       "name": "Comic",
       "properties": [
         {
@@ -70,13 +70,88 @@
           "id": "12:1746572680421012554",
           "name": "deleted",
           "type": 1
+        },
+        {
+          "id": "13:418476003968401958",
+          "name": "lastReadChapterIndex",
+          "type": 6
+        },
+        {
+          "id": "14:4376400276972104833",
+          "name": "lastReadPageIndex",
+          "type": 6
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "2:7819273898175070210",
+      "lastPropertyId": "4:7705234950814873537",
+      "name": "CollectionEntry",
+      "properties": [
+        {
+          "id": "1:5363569434196498127",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:3735266202763162136",
+          "name": "collectionId",
+          "type": 9
+        },
+        {
+          "id": "3:1364501760592668815",
+          "name": "comicId",
+          "type": 9
+        },
+        {
+          "id": "4:7705234950814873537",
+          "name": "displayOrder",
+          "type": 6
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "3:1556473705253692052",
+      "lastPropertyId": "5:5396071608143008388",
+      "name": "FavoriteCollection",
+      "properties": [
+        {
+          "id": "1:7093676685079340763",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:2996294707218808527",
+          "name": "collectionId",
+          "indexId": "2:7774343139297803850",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:4877144651049853116",
+          "name": "name",
+          "type": 9
+        },
+        {
+          "id": "4:1641700484661621951",
+          "name": "displayOrder",
+          "type": 6
+        },
+        {
+          "id": "5:5396071608143008388",
+          "name": "coverPath",
+          "type": 9
         }
       ],
       "relations": []
     }
   ],
-  "lastEntityId": "1:935332529679388433",
-  "lastIndexId": "1:5296018032108637484",
+  "lastEntityId": "3:1556473705253692052",
+  "lastIndexId": "2:7774343139297803850",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,

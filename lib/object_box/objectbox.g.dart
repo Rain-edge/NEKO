@@ -22,7 +22,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(1, 935332529679388433),
     name: 'Comic',
-    lastPropertyId: const obx_int.IdUid(12, 1746572680421012554),
+    lastPropertyId: const obx_int.IdUid(14, 4376400276972104833),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -98,6 +98,93 @@ final _entities = <obx_int.ModelEntity>[
         type: 1,
         flags: 0,
       ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(13, 418476003968401958),
+        name: 'lastReadChapterIndex',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(14, 4376400276972104833),
+        name: 'lastReadPageIndex',
+        type: 6,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(2, 7819273898175070210),
+    name: 'CollectionEntry',
+    lastPropertyId: const obx_int.IdUid(4, 7705234950814873537),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 5363569434196498127),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 3735266202763162136),
+        name: 'collectionId',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 1364501760592668815),
+        name: 'comicId',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 7705234950814873537),
+        name: 'displayOrder',
+        type: 6,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(3, 1556473705253692052),
+    name: 'FavoriteCollection',
+    lastPropertyId: const obx_int.IdUid(5, 5396071608143008388),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 7093676685079340763),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 2996294707218808527),
+        name: 'collectionId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(2, 7774343139297803850),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 4877144651049853116),
+        name: 'name',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 1641700484661621951),
+        name: 'displayOrder',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 5396071608143008388),
+        name: 'coverPath',
+        type: 9,
+        flags: 0,
+      ),
     ],
     relations: <obx_int.ModelRelation>[],
     backlinks: <obx_int.ModelBacklink>[],
@@ -147,8 +234,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
     // Typically, this is done with `dart run build_runner build`.
     generatorVersion: obx_int.GeneratorVersion.v2025_12_16,
     entities: _entities,
-    lastEntityId: const obx_int.IdUid(1, 935332529679388433),
-    lastIndexId: const obx_int.IdUid(1, 5296018032108637484),
+    lastEntityId: const obx_int.IdUid(3, 1556473705253692052),
+    lastIndexId: const obx_int.IdUid(2, 7774343139297803850),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [],
@@ -177,7 +264,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final coverPathOffset = fbb.writeString(object.coverPath);
         final storagePathOffset = fbb.writeString(object.storagePath);
         final chaptersJsonOffset = fbb.writeString(object.chaptersJson);
-        fbb.startTable(13);
+        fbb.startTable(15);
         fbb.addInt64(0, object.id);
         fbb.addOffset(1, comicIdOffset);
         fbb.addOffset(2, titleOffset);
@@ -190,6 +277,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addInt64(9, object.importedAt.millisecondsSinceEpoch);
         fbb.addInt64(10, object.displayOrder);
         fbb.addBool(11, object.deleted);
+        fbb.addInt64(12, object.lastReadChapterIndex);
+        fbb.addInt64(13, object.lastReadPageIndex);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -244,6 +333,18 @@ obx_int.ModelDefinition getObjectBoxModel() {
           26,
           false,
         );
+        final lastReadChapterIndexParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          28,
+          0,
+        );
+        final lastReadPageIndexParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          30,
+          0,
+        );
         final object = Comic(
           id: idParam,
           comicId: comicIdParam,
@@ -257,6 +358,114 @@ obx_int.ModelDefinition getObjectBoxModel() {
           importedAt: importedAtParam,
           displayOrder: displayOrderParam,
           deleted: deletedParam,
+          lastReadChapterIndex: lastReadChapterIndexParam,
+          lastReadPageIndex: lastReadPageIndexParam,
+        );
+
+        return object;
+      },
+    ),
+    CollectionEntry: obx_int.EntityDefinition<CollectionEntry>(
+      model: _entities[1],
+      toOneRelations: (CollectionEntry object) => [],
+      toManyRelations: (CollectionEntry object) => {},
+      getId: (CollectionEntry object) => object.id,
+      setId: (CollectionEntry object, int id) {
+        object.id = id;
+      },
+      objectToFB: (CollectionEntry object, fb.Builder fbb) {
+        final collectionIdOffset = fbb.writeString(object.collectionId);
+        final comicIdOffset = fbb.writeString(object.comicId);
+        fbb.startTable(5);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, collectionIdOffset);
+        fbb.addOffset(2, comicIdOffset);
+        fbb.addInt64(3, object.displayOrder);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final idParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final collectionIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final comicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final displayOrderParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          10,
+          0,
+        );
+        final object = CollectionEntry(
+          id: idParam,
+          collectionId: collectionIdParam,
+          comicId: comicIdParam,
+          displayOrder: displayOrderParam,
+        );
+
+        return object;
+      },
+    ),
+    FavoriteCollection: obx_int.EntityDefinition<FavoriteCollection>(
+      model: _entities[2],
+      toOneRelations: (FavoriteCollection object) => [],
+      toManyRelations: (FavoriteCollection object) => {},
+      getId: (FavoriteCollection object) => object.id,
+      setId: (FavoriteCollection object, int id) {
+        object.id = id;
+      },
+      objectToFB: (FavoriteCollection object, fb.Builder fbb) {
+        final collectionIdOffset = fbb.writeString(object.collectionId);
+        final nameOffset = fbb.writeString(object.name);
+        final coverPathOffset = fbb.writeString(object.coverPath);
+        fbb.startTable(6);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, collectionIdOffset);
+        fbb.addOffset(2, nameOffset);
+        fbb.addInt64(3, object.displayOrder);
+        fbb.addOffset(4, coverPathOffset);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final idParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final collectionIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final nameParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final displayOrderParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          10,
+          0,
+        );
+        final coverPathParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 12, '');
+        final object = FavoriteCollection(
+          id: idParam,
+          collectionId: collectionIdParam,
+          name: nameParam,
+          displayOrder: displayOrderParam,
+          coverPath: coverPathParam,
         );
 
         return object;
@@ -325,5 +534,66 @@ class Comic_ {
   /// See [Comic.deleted].
   static final deleted = obx.QueryBooleanProperty<Comic>(
     _entities[0].properties[11],
+  );
+
+  /// See [Comic.lastReadChapterIndex].
+  static final lastReadChapterIndex = obx.QueryIntegerProperty<Comic>(
+    _entities[0].properties[12],
+  );
+
+  /// See [Comic.lastReadPageIndex].
+  static final lastReadPageIndex = obx.QueryIntegerProperty<Comic>(
+    _entities[0].properties[13],
+  );
+}
+
+/// [CollectionEntry] entity fields to define ObjectBox queries.
+class CollectionEntry_ {
+  /// See [CollectionEntry.id].
+  static final id = obx.QueryIntegerProperty<CollectionEntry>(
+    _entities[1].properties[0],
+  );
+
+  /// See [CollectionEntry.collectionId].
+  static final collectionId = obx.QueryStringProperty<CollectionEntry>(
+    _entities[1].properties[1],
+  );
+
+  /// See [CollectionEntry.comicId].
+  static final comicId = obx.QueryStringProperty<CollectionEntry>(
+    _entities[1].properties[2],
+  );
+
+  /// See [CollectionEntry.displayOrder].
+  static final displayOrder = obx.QueryIntegerProperty<CollectionEntry>(
+    _entities[1].properties[3],
+  );
+}
+
+/// [FavoriteCollection] entity fields to define ObjectBox queries.
+class FavoriteCollection_ {
+  /// See [FavoriteCollection.id].
+  static final id = obx.QueryIntegerProperty<FavoriteCollection>(
+    _entities[2].properties[0],
+  );
+
+  /// See [FavoriteCollection.collectionId].
+  static final collectionId = obx.QueryStringProperty<FavoriteCollection>(
+    _entities[2].properties[1],
+  );
+
+  /// See [FavoriteCollection.name].
+  static final name = obx.QueryStringProperty<FavoriteCollection>(
+    _entities[2].properties[2],
+  );
+
+  /// See [FavoriteCollection.displayOrder].
+  static final displayOrder = obx.QueryIntegerProperty<FavoriteCollection>(
+    _entities[2].properties[3],
+  );
+
+  /// See [FavoriteCollection.coverPath].
+  static final coverPath = obx.QueryStringProperty<FavoriteCollection>(
+    _entities[2].properties[4],
   );
 }

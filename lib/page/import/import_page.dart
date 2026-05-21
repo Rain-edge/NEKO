@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
@@ -24,13 +25,40 @@ class _ImportPageState extends State<ImportPage> {
   bool _importing = false;
 
   Future<void> _importFolder() async {
-    final path = await getDirectoryPath();
-    if (path == null) return;
     setState(() {
       _importing = true;
-      _status = '正在分析...';
+      _status = '正在选择文件夹...';
     });
-    await _processImport(path);
+
+    try {
+      // Use native Android folder picker that copies files via DocumentFile API,
+      // bypassing dart:io limitations with SAF content URIs.
+      const channel = MethodChannel('com.neko.neko/import');
+      final tempPath = await channel.invokeMethod<String>('pickAndCopyFolder');
+
+      if (tempPath == null || tempPath.isEmpty) {
+        // User cancelled or error
+        setState(() { _importing = false; _status = ''; });
+        return;
+      }
+
+      setState(() => _status = '正在分析...');
+      await _processImport(tempPath);
+
+      // Clean up temp directory
+      try {
+        final tempDir = Directory(tempPath);
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      } catch (_) {}
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _status = '导入失败: $e';
+        _importing = false;
+      });
+    }
   }
 
   Future<void> _importZip() async {
@@ -44,24 +72,44 @@ class _ImportPageState extends State<ImportPage> {
     });
 
     try {
-      final bytes = await File(file.path).readAsBytes();
-      final archive = ZipDecoder().decodeBytes(bytes);
+      final zipFile = File(file.path);
+      final fileSize = await zipFile.length();
+      if (fileSize > 50 * 1024 * 1024) {
+        setState(() => _status = '大文件解压中，请耐心等待...');
+      }
 
       final tempDir = Directory.systemTemp.createTempSync('neko_import_');
       try {
-        for (final entry in archive) {
-          if (entry.isFile) {
-            final f = File(p.join(tempDir.path, entry.name));
-            await f.create(recursive: true);
-            await f.writeAsBytes(entry.content as List<int>);
+        // Use native Android ZipFile for reliable extraction —
+        // it doesn't load the entire file into memory.
+        if (Platform.isAndroid) {
+          const channel = MethodChannel('com.neko.neko/import');
+          await channel.invokeMethod('extractZip', {
+            'zipPath': file.path,
+            'targetPath': tempDir.path,
+          });
+        } else {
+          // Desktop fallback
+          final bytes = await zipFile.readAsBytes();
+          final archive = ZipDecoder().decodeBytes(bytes);
+          for (final entry in archive) {
+            if (entry.isFile) {
+              final f = File(p.join(tempDir.path, entry.name));
+              await f.create(recursive: true);
+              await f.writeAsBytes(entry.content as List<int>);
+            }
           }
         }
+
         setState(() => _status = '正在分析...');
         await _processImport(tempDir.path);
       } finally {
-        await tempDir.delete(recursive: true);
+        if (await tempDir.exists()) {
+          try { await tempDir.delete(recursive: true); } catch (_) {}
+        }
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _status = '解压失败: $e';
         _importing = false;
@@ -76,9 +124,11 @@ class _ImportPageState extends State<ImportPage> {
 
     try {
       final result = await _analyzeSource(sourcePath);
-      if (result == null) {
+      if (result == null || result.totalPages == 0) {
         setState(() {
-          _status = '未找到可识别的漫画文件';
+          _status = result == null
+              ? '未找到可识别的漫画文件'
+              : '文件夹中未找到图片文件\n请确认文件夹包含 .jpg/.png/.webp 图片';
           _importing = false;
         });
         return;
@@ -110,10 +160,11 @@ class _ImportPageState extends State<ImportPage> {
         _importing = false;
       });
 
-      final nav = Navigator.of(context);
-      Future.delayed(const Duration(milliseconds: 800), () {
+      // Pop with result after state is updated
+      if (mounted) {
+        final nav = Navigator.of(context);
         nav.pop(true);
-      });
+      }
     } catch (e) {
       // Clean up partial copy on failure
       try {
@@ -187,23 +238,29 @@ class _ImportPageState extends State<ImportPage> {
         final order = int.tryParse(ch['order']?.toString() ?? '') ?? result.chapters.length + 1;
 
         // Find matching directory in source
-        final subDirs = Directory(sourcePath)
-            .listSync()
+        List<FileSystemEntity> dirEntries;
+        try {
+          dirEntries = Directory(sourcePath).listSync();
+        } catch (_) {
+          continue; // skip this chapter if source dir can't be listed
+        }
+        final subDirs = dirEntries
             .whereType<Directory>()
             .where((d) => p.basename(d.path) == chapterName)
             .toList();
 
         final imageFiles = <String>[];
         if (subDirs.isNotEmpty) {
-          imageFiles.addAll(
-            subDirs.first
+          try {
+            final files = subDirs.first
                 .listSync()
                 .whereType<File>()
                 .where((f) => isImageFile(f.path))
                 .map((f) => p.basename(f.path))
                 .toList()
-              ..sort(),
-          );
+              ..sort();
+            imageFiles.addAll(files);
+          } catch (_) {}
         }
 
         result.chapters.add(ComicChapter(
@@ -243,7 +300,20 @@ class _ImportPageState extends State<ImportPage> {
   }) {
     final chapters = <ComicChapter>[];
     int totalPages = 0;
-    final dir = Directory(sourcePath);
+
+    List<FileSystemEntity> entries;
+    try {
+      final dir = Directory(sourcePath);
+      entries = dir.listSync();
+    } catch (_) {
+      return _ImportResult(
+        title: fallbackTitle ?? p.basename(sourcePath),
+        author: fallbackAuthor ?? '',
+        description: fallbackDescription ?? '',
+        chapters: chapters,
+        totalPages: 0,
+      );
+    }
 
     final skipNames = {
       'original_comic_info.json',
@@ -252,16 +322,14 @@ class _ImportPageState extends State<ImportPage> {
       'cover.png',
     };
 
-    final subDirs = dir
-        .listSync()
+    final subDirs = entries
         .whereType<Directory>()
         .where((d) => !skipNames.contains(p.basename(d.path)))
         .toList();
 
     if (subDirs.isEmpty) {
       // Single chapter — all images in root
-      final images = dir
-          .listSync()
+      final images = entries
           .whereType<File>()
           .where((f) => isImageFile(f.path) && !skipNames.contains(p.basename(f.path)))
           .map((f) => p.basename(f.path))
@@ -278,8 +346,13 @@ class _ImportPageState extends State<ImportPage> {
     } else {
       int order = 1;
       for (final subDir in subDirs) {
-        final images = subDir
-            .listSync()
+        List<FileSystemEntity> subEntries;
+        try {
+          subEntries = subDir.listSync();
+        } catch (_) {
+          continue;
+        }
+        final images = subEntries
             .whereType<File>()
             .where((f) => isImageFile(f.path))
             .map((f) => p.basename(f.path))
@@ -307,11 +380,11 @@ class _ImportPageState extends State<ImportPage> {
   }
 
   Future<String> _findCover(_ImportResult result, String comicDir) async {
-    final coverJpg = File(p.join(comicDir, 'cover.jpg'));
-    final coverPng = File(p.join(comicDir, 'cover.png'));
-
-    if (await coverJpg.exists()) return coverJpg.path;
-    if (await coverPng.exists()) return coverPng.path;
+    final coverExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+    for (final ext in coverExtensions) {
+      final f = File(p.join(comicDir, 'cover.$ext'));
+      if (await f.exists()) return f.path;
+    }
 
     if (result.chapters.isNotEmpty) {
       final firstChapter = result.chapters.first;

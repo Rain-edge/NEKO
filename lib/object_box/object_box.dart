@@ -7,9 +7,13 @@ late final ObjectBox objectbox;
 class ObjectBox {
   late final Store store;
   late final Box<Comic> comicBox;
+  late final Box<FavoriteCollection> collectionBox;
+  late final Box<CollectionEntry> entryBox;
 
   ObjectBox._create(this.store) {
     comicBox = store.box<Comic>();
+    collectionBox = store.box<FavoriteCollection>();
+    entryBox = store.box<CollectionEntry>();
   }
 
   static Future<ObjectBox> create() async {

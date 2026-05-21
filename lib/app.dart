@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:neko/page/home/home_page.dart';
+import 'package:neko/page/main/main_page.dart';
 import 'package:neko/page/import/import_page.dart';
+import 'package:neko/page/comic_detail/comic_detail_page.dart';
 import 'package:neko/page/reader/reader_page.dart';
 
 class NekoApp extends StatelessWidget {
@@ -26,20 +27,31 @@ class NekoApp extends StatelessWidget {
         useMaterial3: true,
       ),
       themeMode: ThemeMode.system,
-      home: const HomePage(),
+      home: const MainPage(),
       routes: {
         '/import': (context) => const ImportPage(),
       },
       onGenerateRoute: (settings) {
+        final args = settings.arguments as Map<String, dynamic>? ?? {};
+
+        if (settings.name == '/comic_detail') {
+          return MaterialPageRoute(
+            builder: (context) => ComicDetailPage(
+              comicId: args['comicId'] as String,
+            ),
+          );
+        }
+
         if (settings.name == '/reader') {
-          final args = settings.arguments as Map<String, dynamic>;
           return MaterialPageRoute(
             builder: (context) => ReaderPage(
               comicId: args['comicId'] as String,
               chapterIndex: args['chapterIndex'] as int? ?? 0,
+              pageIndex: args['pageIndex'] as int? ?? 0,
             ),
           );
         }
+
         return null;
       },
     );
