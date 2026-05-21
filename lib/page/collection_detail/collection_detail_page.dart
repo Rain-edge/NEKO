@@ -18,6 +18,7 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
   List<Comic> _comics = [];
   Comic? _draggedComic;
   bool _overDeleteZone = false;
+  bool _overRemoveZone = false;
   FavoriteCollection get _col => widget.collection;
 
   @override
@@ -102,6 +103,7 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
     setState(() {
       _draggedComic = null;
       _overDeleteZone = false;
+      _overRemoveZone = false;
     });
   }
 
@@ -109,8 +111,18 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
     setState(() {
       _draggedComic = null;
       _overDeleteZone = false;
+      _overRemoveZone = false;
     });
     _deleteComic(comic);
+  }
+
+  void _onRemoveAccept(Comic comic) {
+    setState(() {
+      _draggedComic = null;
+      _overDeleteZone = false;
+      _overRemoveZone = false;
+    });
+    _removeFromCollection(comic);
   }
 
   Future<void> _removeFromCollection(Comic comic) async {
@@ -276,34 +288,69 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
                 )
               : _buildDraggableGrid(),
 
-          // Delete zone
+          // Drag action zones — remove from collection + delete
           if (isDragging)
             Positioned(
               bottom: 0, left: 0, right: 0,
-              child: DragTarget<Comic>(
-                onWillAcceptWithDetails: (_) {
-                  if (!_overDeleteZone) setState(() => _overDeleteZone = true);
-                  return true;
-                },
-                onLeave: (_) => setState(() => _overDeleteZone = false),
-                onAcceptWithDetails: (details) => _onDeleteAccept(details.data),
-                builder: (context, candidates, rejected) {
-                  return AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    height: 72,
-                    color: _overDeleteZone ? Colors.red.shade800 : Colors.red.shade400,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.delete, color: Colors.white,
-                            size: _overDeleteZone ? 36 : 28),
-                        const SizedBox(width: 8),
-                        Text(_overDeleteZone ? '松开删除' : '拖到此处删除',
-                            style: const TextStyle(color: Colors.white, fontSize: 16)),
-                      ],
+              child: Row(
+                children: [
+                  // Remove from collection zone (orange)
+                  Expanded(
+                    child: DragTarget<Comic>(
+                      onWillAcceptWithDetails: (_) {
+                        if (!_overRemoveZone) setState(() => _overRemoveZone = true);
+                        return true;
+                      },
+                      onLeave: (_) => setState(() => _overRemoveZone = false),
+                      onAcceptWithDetails: (details) => _onRemoveAccept(details.data),
+                      builder: (context, candidates, rejected) {
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          height: 72,
+                          color: _overRemoveZone ? Colors.orange.shade800 : Colors.orange.shade400,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.remove_circle_outline, color: Colors.white,
+                                  size: _overRemoveZone ? 36 : 28),
+                              const SizedBox(width: 4),
+                              Text(_overRemoveZone ? '松开移出收藏' : '移出收藏',
+                                  style: const TextStyle(color: Colors.white, fontSize: 13)),
+                            ],
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
+                  ),
+                  // Delete zone (red)
+                  Expanded(
+                    child: DragTarget<Comic>(
+                      onWillAcceptWithDetails: (_) {
+                        if (!_overDeleteZone) setState(() => _overDeleteZone = true);
+                        return true;
+                      },
+                      onLeave: (_) => setState(() => _overDeleteZone = false),
+                      onAcceptWithDetails: (details) => _onDeleteAccept(details.data),
+                      builder: (context, candidates, rejected) {
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          height: 72,
+                          color: _overDeleteZone ? Colors.red.shade800 : Colors.red.shade400,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.delete, color: Colors.white,
+                                  size: _overDeleteZone ? 36 : 28),
+                              const SizedBox(width: 4),
+                              Text(_overDeleteZone ? '松开删除' : '删除漫画',
+                                  style: const TextStyle(color: Colors.white, fontSize: 13)),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
         ],

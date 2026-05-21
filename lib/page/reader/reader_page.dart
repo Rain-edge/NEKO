@@ -172,19 +172,24 @@ class _ReaderPageState extends State<ReaderPage> {
       _debouncedSave();
     }
 
-    // Auto-advance to next chapter when near the bottom
-    if (!_autoAdvancing && _pagePaths.isNotEmpty) {
-      final maxScroll = _scrollController.position.maxScrollExtent;
-      final currentOffset = _scrollController.offset;
-      // Within 1 screen height of the bottom → advance
-      if (maxScroll > 0 && currentOffset >= maxScroll - _screenHeight * 0.8) {
-        _advanceToNextChapter();
-      }
+    if (_autoAdvancing || _pagePaths.isEmpty) return;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentOffset = _scrollController.offset;
+
+    // Near the bottom → advance to next chapter
+    if (maxScroll > 0 && currentOffset >= maxScroll - _screenHeight * 0.8) {
+      _advanceToNextChapter();
+      return;
+    }
+
+    // Near the top → go back to previous chapter
+    if (_chapterIndex > 0 && currentOffset <= _screenHeight * 0.2) {
+      _goToPrevChapter();
     }
   }
 
   void _advanceToNextChapter() {
-    if (_chapterIndex >= _chapters.length - 1) return; // last chapter
+    if (_chapterIndex >= _chapters.length - 1) return;
     _autoAdvancing = true;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -193,7 +198,25 @@ class _ReaderPageState extends State<ReaderPage> {
       ),
     );
     _goToChapter(_chapterIndex + 1);
-    // Reset auto-advance flag after load
+    Future.delayed(const Duration(milliseconds: 500), () {
+      _autoAdvancing = false;
+    });
+  }
+
+  void _goToPrevChapter() {
+    if (_chapterIndex <= 0) return;
+    _autoAdvancing = true;
+    final prev = _chapters[_chapterIndex - 1];
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('正在加载: ${prev.name.isNotEmpty ? prev.name : '第$_chapterIndex 话'}'),
+        duration: const Duration(milliseconds: 800),
+      ),
+    );
+    // Go to the last page of the previous chapter
+    final prevPageCount = prev.pageCount;
+    _pageIndex = prevPageCount > 0 ? prevPageCount - 1 : 0;
+    _goToChapter(_chapterIndex - 1);
     Future.delayed(const Duration(milliseconds: 500), () {
       _autoAdvancing = false;
     });
@@ -428,11 +451,15 @@ class _ReaderPageState extends State<ReaderPage> {
     final sh = _screenHeight;
     return NotificationListener<ScrollEndNotification>(
       onNotification: (notification) {
-        // Check if we're on the last page and there are more chapters
-        if (!_autoAdvancing &&
-            _pageIndex == _pagePaths.length - 1 &&
+        if (_autoAdvancing) return false;
+        // At last page → next chapter
+        if (_pageIndex == _pagePaths.length - 1 &&
             _chapterIndex < _chapters.length - 1) {
           _advanceToNextChapter();
+        }
+        // At first page → previous chapter
+        if (_pageIndex == 0 && _chapterIndex > 0) {
+          _goToPrevChapter();
         }
         return false;
       },
@@ -444,15 +471,22 @@ class _ReaderPageState extends State<ReaderPage> {
         onPageChanged: (index) {
           setState(() => _pageIndex = index);
           _debouncedSave();
-          // Auto-advance if swiping past the last page
-          if (!_autoAdvancing &&
-              index == _pagePaths.length - 1 &&
+          if (_autoAdvancing) return;
+          // Auto-advance to next chapter when on last page
+          if (index == _pagePaths.length - 1 &&
               _chapterIndex < _chapters.length - 1) {
-            // Give user a moment to see the last page, then advance
             Future.delayed(const Duration(milliseconds: 300), () {
               if (_pageIndex == _pagePaths.length - 1 &&
                   _chapterIndex < _chapters.length - 1) {
                 _advanceToNextChapter();
+              }
+            });
+          }
+          // Auto-return to previous chapter when on first page
+          if (index == 0 && _chapterIndex > 0) {
+            Future.delayed(const Duration(milliseconds: 300), () {
+              if (_pageIndex == 0 && _chapterIndex > 0) {
+                _goToPrevChapter();
               }
             });
           }
