@@ -42,6 +42,7 @@ class _ReaderPageState extends State<ReaderPage> {
   Timer? _saveTimer;
   int _lastSavedChapter = -1;
   int _lastSavedPage = -1;
+  bool _autoAdvancing = false;
 
   @override
   void initState() {
@@ -170,6 +171,32 @@ class _ReaderPageState extends State<ReaderPage> {
       setState(() => _pageIndex = page);
       _debouncedSave();
     }
+
+    // Auto-advance to next chapter when near the bottom
+    if (!_autoAdvancing && _pagePaths.isNotEmpty) {
+      final maxScroll = _scrollController.position.maxScrollExtent;
+      final currentOffset = _scrollController.offset;
+      // Within 1 screen height of the bottom → advance
+      if (maxScroll > 0 && currentOffset >= maxScroll - _screenHeight * 0.8) {
+        _advanceToNextChapter();
+      }
+    }
+  }
+
+  void _advanceToNextChapter() {
+    if (_chapterIndex >= _chapters.length - 1) return; // last chapter
+    _autoAdvancing = true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('正在加载: ${_chapters[_chapterIndex + 1].name.isNotEmpty ? _chapters[_chapterIndex + 1].name : '第${_chapterIndex + 2}话'}'),
+        duration: const Duration(milliseconds: 800),
+      ),
+    );
+    _goToChapter(_chapterIndex + 1);
+    // Reset auto-advance flag after load
+    Future.delayed(const Duration(milliseconds: 500), () {
+      _autoAdvancing = false;
+    });
   }
 
   void _debouncedSave() {
@@ -399,31 +426,54 @@ class _ReaderPageState extends State<ReaderPage> {
 
   Widget _buildPageViewer() {
     final sh = _screenHeight;
-    return PageView.builder(
-      key: ValueKey('page_$_chapterIndex'),
-      controller: _pageController,
-      itemCount: _pagePaths.length,
-      scrollDirection: Axis.horizontal,
-      onPageChanged: (index) {
-        setState(() => _pageIndex = index);
-        _debouncedSave();
+    return NotificationListener<ScrollEndNotification>(
+      onNotification: (notification) {
+        // Check if we're on the last page and there are more chapters
+        if (!_autoAdvancing &&
+            _pageIndex == _pagePaths.length - 1 &&
+            _chapterIndex < _chapters.length - 1) {
+          _advanceToNextChapter();
+        }
+        return false;
       },
-      itemBuilder: (context, index) {
-        return InteractiveViewer(
-          transformationController: _controllerFor(index),
-          minScale: 0.5,
-          maxScale: 4.0,
-          child: Center(
-            child: Image.file(
-              File(_pagePaths[index]),
-              fit: BoxFit.contain,
-              cacheWidth: (sh * MediaQuery.of(context).devicePixelRatio).round(),
-              errorBuilder: (_, e, s) =>
-                  const Icon(Icons.broken_image, size: 64, color: Colors.white54),
+      child: PageView.builder(
+        key: ValueKey('page_$_chapterIndex'),
+        controller: _pageController,
+        itemCount: _pagePaths.length,
+        scrollDirection: Axis.horizontal,
+        onPageChanged: (index) {
+          setState(() => _pageIndex = index);
+          _debouncedSave();
+          // Auto-advance if swiping past the last page
+          if (!_autoAdvancing &&
+              index == _pagePaths.length - 1 &&
+              _chapterIndex < _chapters.length - 1) {
+            // Give user a moment to see the last page, then advance
+            Future.delayed(const Duration(milliseconds: 300), () {
+              if (_pageIndex == _pagePaths.length - 1 &&
+                  _chapterIndex < _chapters.length - 1) {
+                _advanceToNextChapter();
+              }
+            });
+          }
+        },
+        itemBuilder: (context, index) {
+          return InteractiveViewer(
+            transformationController: _controllerFor(index),
+            minScale: 0.5,
+            maxScale: 4.0,
+            child: Center(
+              child: Image.file(
+                File(_pagePaths[index]),
+                fit: BoxFit.contain,
+                cacheWidth: (sh * MediaQuery.of(context).devicePixelRatio).round(),
+                errorBuilder: (_, e, s) =>
+                    const Icon(Icons.broken_image, size: 64, color: Colors.white54),
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
