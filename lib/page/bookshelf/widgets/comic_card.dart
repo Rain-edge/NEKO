@@ -6,7 +6,6 @@ class ComicCardWidget extends StatelessWidget {
   final Comic comic;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
-  final bool editMode;
   final bool isDragged;
 
   const ComicCardWidget({
@@ -14,7 +13,6 @@ class ComicCardWidget extends StatelessWidget {
     required this.comic,
     this.onTap,
     this.onLongPress,
-    this.editMode = false,
     this.isDragged = false,
   });
 
@@ -50,7 +48,7 @@ class ComicCardWidget extends StatelessWidget {
       return _placeholder(context);
     }
 
-    final progress = comic.progressLabel; // Cache — computed once
+    final progress = comic.progressLabel;
 
     return Stack(
       fit: StackFit.expand,
@@ -67,19 +65,13 @@ class ComicCardWidget extends StatelessWidget {
         ),
         if (progress != null)
           Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
+            bottom: 0, left: 0, right: 0,
             child: Container(
               color: Colors.black54,
               padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
-              child: Text(
-                progress,
-                style: const TextStyle(color: Colors.white, fontSize: 10),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-              ),
+              child: Text(progress,
+                  style: const TextStyle(color: Colors.white, fontSize: 10),
+                  maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
             ),
           ),
       ],
@@ -87,34 +79,25 @@ class ComicCardWidget extends StatelessWidget {
   }
 
   Widget _placeholder(BuildContext context) {
-    final progress = comic.progressLabel; // Cache — computed once
+    final progress = comic.progressLabel;
     return Container(
       color: Theme.of(context).colorScheme.surfaceContainerHighest,
       child: Stack(
         fit: StackFit.expand,
         children: [
           Center(
-            child: Icon(
-              Icons.menu_book,
-              size: 40,
-              color: Theme.of(context).colorScheme.outline,
-            ),
+            child: Icon(Icons.menu_book, size: 40,
+                color: Theme.of(context).colorScheme.outline),
           ),
           if (progress != null)
             Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
+              bottom: 0, left: 0, right: 0,
               child: Container(
                 color: Colors.black54,
                 padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
-                child: Text(
-                  progress,
-                  style: const TextStyle(color: Colors.white, fontSize: 10),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                ),
+                child: Text(progress,
+                    style: const TextStyle(color: Colors.white, fontSize: 10),
+                    maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
               ),
             ),
         ],

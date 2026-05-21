@@ -16,7 +16,8 @@ class CollectionDetailPage extends StatefulWidget {
 
 class _CollectionDetailPageState extends State<CollectionDetailPage> {
   List<Comic> _comics = [];
-  bool _editMode = false;
+  Comic? _draggedComic;
+  bool _overDeleteZone = false;
   FavoriteCollection get _col => widget.collection;
 
   @override
@@ -43,11 +44,11 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
           _comics.add(c);
         }
       }
-      _comics.sort((a, b) => comicIds.indexOf(a.comicId).compareTo(comicIds.indexOf(b.comicId)));
+      _comics.sort((a, b) =>
+          comicIds.indexOf(a.comicId).compareTo(comicIds.indexOf(b.comicId)));
     }
 
     _updateCollectionCover();
-
     if (mounted) setState(() {});
   }
 
@@ -61,7 +62,7 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
   }
 
   void _openComic(Comic comic) {
-    if (_editMode) return;
+    if (_draggedComic != null) return;
     Navigator.pushNamed(
       context,
       '/comic_detail',
@@ -69,13 +70,47 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
     ).then((_) => _load());
   }
 
-  void _startEditMode(Comic comic) {
-    setState(() => _editMode = true);
+  void _swapComics(int fromIndex, int toIndex) {
+    if (fromIndex == toIndex) return;
+    setState(() {
+      final item = _comics.removeAt(fromIndex);
+      _comics.insert(toIndex, item);
+
+      final entries = objectbox.entryBox
+          .query(CollectionEntry_.collectionId.equals(_col.collectionId))
+          .order(CollectionEntry_.displayOrder)
+          .build()
+          .find();
+
+      for (int i = 0; i < _comics.length; i++) {
+        for (final e in entries) {
+          if (e.comicId == _comics[i].comicId && e.displayOrder != i) {
+            e.displayOrder = i;
+            objectbox.entryBox.put(e);
+            break;
+          }
+        }
+      }
+    });
   }
 
-  void _endEditMode() {
-    if (!_editMode) return;
-    setState(() => _editMode = false);
+  void _onDragStarted(Comic comic) {
+    setState(() => _draggedComic = comic);
+  }
+
+  void _onDragEnded() {
+    setState(() {
+      _draggedComic = null;
+      _overDeleteZone = false;
+    });
+  }
+
+  void _onDeleteAccept(Comic comic) {
+    setState(() {
+      _draggedComic = null;
+      _overDeleteZone = false;
+    });
+    _deleteComic(comic);
   }
 
   Future<void> _removeFromCollection(Comic comic) async {
@@ -91,32 +126,7 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
     _load();
   }
 
-  void _onReorder(int oldIndex, int newIndex) {
-    if (newIndex > oldIndex) newIndex--;
-    final item = _comics.removeAt(oldIndex);
-    _comics.insert(newIndex, item);
-
-    // Rebuild all CollectionEntry display orders
-    final entries = objectbox.entryBox
-        .query(CollectionEntry_.collectionId.equals(_col.collectionId))
-        .order(CollectionEntry_.displayOrder)
-        .build()
-        .find();
-
-    for (int i = 0; i < _comics.length; i++) {
-      for (final e in entries) {
-        if (e.comicId == _comics[i].comicId && e.displayOrder != i) {
-          e.displayOrder = i;
-          objectbox.entryBox.put(e);
-          break;
-        }
-      }
-    }
-    setState(() {});
-  }
-
   Future<void> _deleteComic(Comic comic) async {
-    _endEditMode();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -207,148 +217,9 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('关闭'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('关闭')),
         ],
       ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_col.name),
-        centerTitle: true,
-      ),
-      body: Stack(
-        children: [
-          _comics.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.collections_bookmark,
-                          size: 64,
-                          color: Theme.of(context).colorScheme.outline),
-                      const SizedBox(height: 16),
-                      Text('收藏夹是空的',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(
-                                  color: Theme.of(context).colorScheme.outline)),
-                    ],
-                  ),
-                )
-              : _editMode
-                  ? _buildEditGrid()
-                  : _buildNormalGrid(),
-          // Edit mode header
-          if (_editMode)
-            Positioned(
-              top: 0, left: 0, right: 0,
-              child: SafeArea(
-                bottom: false,
-                child: Container(
-                  color: Colors.black87,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.close, color: Colors.white),
-                        onPressed: _endEditMode,
-                      ),
-                      const Expanded(
-                        child: Text(
-                          '编辑模式 — 长按拖拽排序，点击 X 移除',
-                          style: TextStyle(color: Colors.white70, fontSize: 13),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-      floatingActionButton: _editMode
-          ? null
-          : FloatingActionButton(
-              onPressed: _showAddComicDialog,
-              child: const Icon(Icons.add),
-            ),
-    );
-  }
-
-  Widget _buildNormalGrid() {
-    return GridView.builder(
-      padding: const EdgeInsets.all(12),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 0.72,
-      ),
-      itemCount: _comics.length,
-      itemBuilder: (context, index) {
-        return ComicCardWidget(
-          key: ValueKey(_comics[index].comicId),
-          comic: _comics[index],
-          onTap: () => _openComic(_comics[index]),
-          onLongPress: () => _showComicOptions(_comics[index]),
-        );
-      },
-    );
-  }
-
-  Widget _buildEditGrid() {
-    return SafeArea(
-      child: ReorderableListView.builder(
-        padding: const EdgeInsets.all(8),
-        buildDefaultDragHandles: true,
-        onReorder: _onReorder,
-        itemCount: _comics.length,
-        itemBuilder: (context, index) {
-          final comic = _comics[index];
-          return Card(
-            key: ValueKey('edit_${comic.comicId}'),
-            margin: const EdgeInsets.only(bottom: 8),
-            child: ListTile(
-              leading: ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: SizedBox(
-                  width: 48,
-                  height: 68,
-                  child: comic.coverPath.isNotEmpty
-                      ? Image.file(
-                          File(comic.coverPath),
-                          fit: BoxFit.cover,
-                          cacheWidth: 96,
-                          errorBuilder: (_, __, ___) => _placeholderIcon(),
-                        )
-                      : _placeholderIcon(),
-                ),
-              ),
-              title: Text(comic.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text('${comic.pageCount} 页'),
-              trailing: IconButton(
-                icon: const Icon(Icons.remove_circle, color: Colors.orange),
-                onPressed: () => _removeFromCollection(comic),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _placeholderIcon() {
-    return Container(
-      color: Colors.grey.shade300,
-      child: const Icon(Icons.menu_book, size: 24, color: Colors.grey),
     );
   }
 
@@ -359,14 +230,6 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.reorder),
-              title: const Text('编辑排序'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _startEditMode(comic);
-              },
-            ),
             ListTile(
               leading: const Icon(Icons.remove_circle_outline),
               title: const Text('从收藏中移除'),
@@ -385,6 +248,131 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDragging = _draggedComic != null;
+
+    return Scaffold(
+      appBar: AppBar(title: Text(_col.name), centerTitle: true),
+      body: Stack(
+        children: [
+          _comics.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.collections_bookmark, size: 64,
+                          color: Theme.of(context).colorScheme.outline),
+                      const SizedBox(height: 16),
+                      Text('收藏夹是空的',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(color: Theme.of(context).colorScheme.outline)),
+                    ],
+                  ),
+                )
+              : _buildDraggableGrid(),
+
+          // Delete zone
+          if (isDragging)
+            Positioned(
+              bottom: 0, left: 0, right: 0,
+              child: DragTarget<Comic>(
+                onWillAcceptWithDetails: (_) {
+                  if (!_overDeleteZone) setState(() => _overDeleteZone = true);
+                  return true;
+                },
+                onLeave: (_) => setState(() => _overDeleteZone = false),
+                onAcceptWithDetails: (details) => _onDeleteAccept(details.data),
+                builder: (context, candidates, rejected) {
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    height: 72,
+                    color: _overDeleteZone ? Colors.red.shade800 : Colors.red.shade400,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.delete, color: Colors.white,
+                            size: _overDeleteZone ? 36 : 28),
+                        const SizedBox(width: 8),
+                        Text(_overDeleteZone ? '松开删除' : '拖到此处删除',
+                            style: const TextStyle(color: Colors.white, fontSize: 16)),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+      floatingActionButton: isDragging
+          ? null
+          : FloatingActionButton(
+              onPressed: _showAddComicDialog,
+              child: const Icon(Icons.add),
+            ),
+    );
+  }
+
+  Widget _buildDraggableGrid() {
+    return SafeArea(
+      child: GridView.builder(
+        padding: const EdgeInsets.all(12),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 0.72,
+        ),
+        itemCount: _comics.length,
+        itemBuilder: (context, index) {
+          final comic = _comics[index];
+          final isDragged = _draggedComic?.comicId == comic.comicId;
+
+          final card = ComicCardWidget(
+            key: ValueKey('card_${comic.comicId}'),
+            comic: comic,
+            onTap: () => _openComic(comic),
+            onLongPress: isDragged ? null : () {},
+            isDragged: isDragged,
+          );
+
+          return LongPressDraggable<Comic>(
+            key: ValueKey('drag_${comic.comicId}'),
+            data: comic,
+            delay: const Duration(milliseconds: 300),
+            hapticFeedbackOnStart: true,
+            onDragStarted: () => _onDragStarted(comic),
+            onDragEnd: (_) => _onDragEnded(),
+            onDraggableCanceled: (_, __) => _onDragEnded(),
+            feedback: SizedBox(
+              width: 120, height: 167,
+              child: Material(elevation: 8, borderRadius: BorderRadius.circular(8), child: card),
+            ),
+            childWhenDragging: Opacity(opacity: 0.3, child: card),
+            child: DragTarget<Comic>(
+              onWillAcceptWithDetails: (details) {
+                return details.data.comicId != comic.comicId;
+              },
+              onAcceptWithDetails: (details) {
+                final fromIndex = _comics.indexOf(details.data);
+                _swapComics(fromIndex, index);
+              },
+              builder: (context, candidates, rejected) {
+                return candidates.isNotEmpty
+                    ? Card(
+                        clipBehavior: Clip.antiAlias,
+                        color: Theme.of(context).colorScheme.primary.withAlpha(40),
+                        child: const Center(child: Icon(Icons.swap_horiz, size: 32)),
+                      )
+                    : card;
+              },
+            ),
+          );
+        },
       ),
     );
   }

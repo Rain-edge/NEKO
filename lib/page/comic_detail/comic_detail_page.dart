@@ -61,6 +61,32 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
     return '上次阅读: $label';
   }
 
+  Future<void> _renameComic() async {
+    final controller = TextEditingController(text: _comic.title);
+    final newTitle = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('修改名称'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '漫画名称'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (newTitle == null || newTitle.isEmpty || newTitle == _comic.title) return;
+    _comic.title = newTitle;
+    objectbox.comicBox.put(_comic);
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -92,11 +118,25 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
           ),
           const SizedBox(height: 16),
 
-          // Title
-          Text(
-            _comic.title,
-            style: Theme.of(context).textTheme.headlineSmall,
-            textAlign: TextAlign.center,
+          // Title (with rename button)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  _comic.title,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                icon: const Icon(Icons.edit, size: 20),
+                tooltip: '修改名称',
+                onPressed: _renameComic,
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
           ),
           if (_comic.author.isNotEmpty) ...[
             const SizedBox(height: 4),
