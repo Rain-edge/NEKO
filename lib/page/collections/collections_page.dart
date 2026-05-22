@@ -104,7 +104,9 @@ class _CollectionsPageState extends State<CollectionsPage> {
     }
 
     return SafeArea(
-      child: GridView.builder(
+      child: RefreshIndicator(
+        onRefresh: () async => _load(),
+        child: GridView.builder(
       padding: const EdgeInsets.all(12),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
@@ -135,6 +137,7 @@ class _CollectionsPageState extends State<CollectionsPage> {
           ),
         );
       },
+    ),
     ),
     );
   }

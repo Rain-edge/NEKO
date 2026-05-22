@@ -185,7 +185,10 @@ class _BookshelfPageState extends State<BookshelfPage>
                   ],
                 ),
               )
-            : _buildDraggableGrid(),
+            : RefreshIndicator(
+                onRefresh: () async => _loadComics(),
+                child: _buildDraggableGrid(),
+              ),
 
         // Delete zone — shown during drag
         if (isDragging)

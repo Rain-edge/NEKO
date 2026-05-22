@@ -55,13 +55,17 @@ class _MainPageState extends State<MainPage> {
     // Copy to app storage so the wallpaper persists
     final appDir = await _getWallpaperDir();
     await appDir.create(recursive: true);
-    final destPath = '${appDir.path}/wallpaper${_extension(file.path)}';
+    final destPath = '${appDir.path}/wallpaper_${DateTime.now().millisecondsSinceEpoch}${_extension(file.path)}';
+    await wallpaperFile.copy(destPath);
     await wallpaperFile.copy(destPath);
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_wallpaperKey, destPath);
 
     if (mounted) setState(() => _wallpaperPath = destPath);
+
+    // Clear old wallpaper files to avoid filling storage
+    _cleanOldWallpapers(appDir, destPath);
   }
 
   Future<Directory> _getWallpaperDir() async {
@@ -75,6 +79,16 @@ class _MainPageState extends State<MainPage> {
   String _extension(String path) {
     final idx = path.lastIndexOf('.');
     return idx >= 0 ? path.substring(idx) : '.jpg';
+  }
+
+  Future<void> _cleanOldWallpapers(Directory dir, String keepPath) async {
+    try {
+      await for (final f in dir.list()) {
+        if (f is File && f.path != keepPath) {
+          await f.delete();
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _createCollection() async {
