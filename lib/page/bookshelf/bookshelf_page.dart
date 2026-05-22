@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:neko/model/comic.dart';
 import 'package:neko/object_box/object_box.dart';
@@ -14,15 +15,36 @@ class BookshelfPage extends StatefulWidget {
   State<BookshelfPage> createState() => _BookshelfPageState();
 }
 
-class _BookshelfPageState extends State<BookshelfPage> {
+class _BookshelfPageState extends State<BookshelfPage>
+    with SingleTickerProviderStateMixin {
   List<Comic> _comics = [];
   Comic? _draggedComic;
   bool _overDeleteZone = false;
+  int? _hoveredIndex;
+
+  late AnimationController _wobbleCtrl;
+  late Animation<double> _wobbleAnim;
 
   @override
   void initState() {
     super.initState();
     _loadComics();
+    _wobbleCtrl = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+    _wobbleAnim = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0, end: 0.08), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 0.08, end: -0.06), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: -0.06, end: 0.04), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 0.04, end: 0), weight: 1),
+    ]).animate(CurvedAnimation(parent: _wobbleCtrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _wobbleCtrl.dispose();
+    super.dispose();
   }
 
   void _loadComics() {
@@ -51,7 +73,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
     setState(() {
       final item = _comics.removeAt(fromIndex);
       _comics.insert(toIndex, item);
-      // Save display orders
       final changed = <Comic>[];
       for (int i = 0; i < _comics.length; i++) {
         if (_comics[i].displayOrder != i) {
@@ -66,20 +87,41 @@ class _BookshelfPageState extends State<BookshelfPage> {
   }
 
   void _onDragStarted(Comic comic) {
-    setState(() => _draggedComic = comic);
-  }
-
-  void _onDragEnded() {
+    _wobbleCtrl.forward(from: 0);
     setState(() {
-      _draggedComic = null;
-      _overDeleteZone = false;
+      _draggedComic = comic;
+      _hoveredIndex = _comics.indexOf(comic);
     });
   }
 
-  void _onDeleteAccept(Comic comic) {
+  void _onDragEnded() {
+    _wobbleCtrl.reset();
     setState(() {
       _draggedComic = null;
       _overDeleteZone = false;
+      _hoveredIndex = null;
+    });
+  }
+
+  void _onHoverEnter(int index) {
+    if (_hoveredIndex != index) {
+      setState(() => _hoveredIndex = index);
+    }
+  }
+
+  void _onHoverLeave(int index) {
+    // Only clear if we're still hovering at this index
+    if (_hoveredIndex == index) {
+      // Don't clear — let the next enter update it
+    }
+  }
+
+  void _onDeleteAccept(Comic comic) {
+    _wobbleCtrl.reset();
+    setState(() {
+      _draggedComic = null;
+      _overDeleteZone = false;
+      _hoveredIndex = null;
     });
     _deleteComic(comic);
   }
@@ -183,64 +225,102 @@ class _BookshelfPageState extends State<BookshelfPage> {
 
   Widget _buildDraggableGrid() {
     return SafeArea(
-      child: GridView.builder(
-        padding: const EdgeInsets.all(12),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 0.72,
-        ),
-        itemCount: _comics.length,
-        itemBuilder: (context, index) {
-          final comic = _comics[index];
-          final isDragged = _draggedComic?.comicId == comic.comicId;
-
-          final card = ComicCardWidget(
-            key: ValueKey('card_${comic.comicId}'),
-            comic: comic,
-            onTap: () => _openComic(comic),
-            isDragged: isDragged,
-          );
-
-          return LongPressDraggable<Comic>(
-            key: ValueKey('drag_${comic.comicId}'),
-            data: comic,
-            delay: const Duration(milliseconds: 300),
-            hapticFeedbackOnStart: true,
-            onDragStarted: () => _onDragStarted(comic),
-            onDragEnd: (_) => _onDragEnded(),
-            onDraggableCanceled: (_, __) => _onDragEnded(),
-            feedback: SizedBox(
-              width: 120,
-              height: 167,
-              child: Material(
-                elevation: 8,
-                borderRadius: BorderRadius.circular(8),
-                child: card,
-              ),
+      child: AnimatedBuilder(
+        animation: _wobbleAnim,
+        builder: (context, child) {
+          return GridView.builder(
+            padding: const EdgeInsets.all(12),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 0.72,
             ),
-            childWhenDragging: Opacity(opacity: 0.3, child: card),
-            child: DragTarget<Comic>(
-              onWillAcceptWithDetails: (details) {
-                // Accept if different comic
-                return details.data.comicId != comic.comicId;
-              },
-              onAcceptWithDetails: (details) {
-                final fromIndex = _comics.indexOf(details.data);
-                final toIndex = index;
-                _swapComics(fromIndex, toIndex);
-              },
-              builder: (context, candidates, rejected) {
-                return candidates.isNotEmpty
-                    ? Card(
-                        clipBehavior: Clip.antiAlias,
-                        color: Theme.of(context).colorScheme.primary.withAlpha(40),
-                        child: const Center(child: Icon(Icons.swap_horiz, size: 32)),
-                      )
-                    : card;
-              },
-            ),
+            itemCount: _comics.length,
+            itemBuilder: (context, index) {
+              final comic = _comics[index];
+              final isDragged = _draggedComic?.comicId == comic.comicId;
+              final isHovered = _hoveredIndex == index && !isDragged;
+
+              final card = ComicCardWidget(
+                key: ValueKey('card_${comic.comicId}'),
+                comic: comic,
+                onTap: () => _openComic(comic),
+                isDragged: isDragged,
+              );
+
+              // Wobble the dragged comic
+              Widget content = isDragged
+                  ? Transform.rotate(
+                      angle: _wobbleAnim.value,
+                      child: card,
+                    )
+                  : card;
+
+              // Slide effect when hovered
+              if (isHovered) {
+                content = Transform.translate(
+                  offset: Offset(math.sin(_wobbleAnim.value * 20) * 8, 0),
+                  child: content,
+                );
+              }
+
+              return LongPressDraggable<Comic>(
+                key: ValueKey('drag_${comic.comicId}'),
+                data: comic,
+                delay: const Duration(milliseconds: 300),
+                hapticFeedbackOnStart: true,
+                onDragStarted: () => _onDragStarted(comic),
+                onDragEnd: (_) => _onDragEnded(),
+                onDraggableCanceled: (_, __) => _onDragEnded(),
+                feedback: SizedBox(
+                  width: 120,
+                  height: 167,
+                  child: Material(
+                    elevation: 8,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Transform.rotate(
+                      angle: 0.05,
+                      child: card,
+                    ),
+                  ),
+                ),
+                childWhenDragging: Opacity(opacity: 0.2, child: card),
+                child: DragTarget<Comic>(
+                  onWillAcceptWithDetails: (details) {
+                    if (details.data.comicId == comic.comicId) return false;
+                    _onHoverEnter(index);
+                    return true;
+                  },
+                  onLeave: (_) => _onHoverLeave(index),
+                  onAcceptWithDetails: (details) {
+                    final fromIndex = _comics.indexOf(details.data);
+                    _swapComics(fromIndex, index);
+                    _onDragEnded();
+                  },
+                  builder: (context, candidates, rejected) {
+                    final hasCandidate = candidates.isNotEmpty;
+                    return AnimatedScale(
+                      duration: const Duration(milliseconds: 150),
+                      scale: hasCandidate ? 1.08 : 1.0,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        decoration: hasCandidate
+                            ? BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  width: 2,
+                                ),
+                              )
+                            : null,
+                        child: content,
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
           );
         },
       ),

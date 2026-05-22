@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:isolate';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:neko/model/comic.dart';
@@ -40,9 +39,8 @@ class _ReaderPageState extends State<ReaderPage> {
   late List<ComicChapter> _chapters;
   int _currentChapterIdx = 0;
 
-  // Combined segments for seamless scrolling
   List<_ChapterSegment> _segments = [];
-  List<dynamic> _displayItems = []; // String (image path) or _Sep (separator)
+  List<String> _displayItems = [];
   bool _loadingPages = true;
   bool _showUI = true;
   double _screenHeight = 0;
@@ -52,8 +50,6 @@ class _ReaderPageState extends State<ReaderPage> {
   Timer? _saveTimer;
   int _lastSavedChapter = -1;
   int _lastSavedPage = -1;
-
-  // Track the current global page index (across all loaded segments)
   int _globalPage = 0;
 
   @override
@@ -105,7 +101,6 @@ class _ReaderPageState extends State<ReaderPage> {
   Future<void> _loadInitialSegments() async {
     setState(() => _loadingPages = true);
 
-    // Load current, next, and previous chapters in parallel
     final futures = <Future<_ChapterSegment>>[];
     if (_currentChapterIdx > 0) {
       futures.add(_buildSegment(_currentChapterIdx - 1));
@@ -120,11 +115,10 @@ class _ReaderPageState extends State<ReaderPage> {
 
     if (!mounted) return;
 
-    // Scroll to the right page after layout
     if (_screenHeight > 0) {
+      final maxPage = _chapters[_currentChapterIdx].pageCount;
       final targetGlobal = _globalPageForChapter(_currentChapterIdx) +
-          widget.pageIndex.clamp(0,
-              _chapters[_currentChapterIdx].pageCount.clamp(1, 999999) - 1);
+          widget.pageIndex.clamp(0, maxPage > 0 ? maxPage - 1 : 0);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToGlobalPage(targetGlobal);
       });
@@ -148,7 +142,6 @@ class _ReaderPageState extends State<ReaderPage> {
             .where((path) => File(path).existsSync())
             .toList();
       }
-
       try {
         final dir = Directory(chapterDir);
         if (dir.existsSync()) {
@@ -171,98 +164,89 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
-  /// Separator marker class
-  static const _sep = '__SEP__';
+  // ── Display list ──
 
   void _rebuildDisplayItems() {
-    final items = <dynamic>[];
-    for (int i = 0; i < _segments.length; i++) {
-      if (i > 0) items.add(_sep);
-      items.addAll(_segments[i].pagePaths);
+    final items = <String>[];
+    for (final seg in _segments) {
+      items.addAll(seg.pagePaths);
     }
     _displayItems = items;
   }
 
-  /// Find which chapter a global item index belongs to.
   int _chapterIdxForGlobal(int globalIndex) {
     int offset = 0;
     for (int i = 0; i < _segments.length; i++) {
       final segLen = _segments[i].pagePaths.length;
-      final segEnd = offset + segLen;
-      if (globalIndex < segEnd) return _segments[i].chapterIndex;
-      offset = segEnd + 1; // +1 for separator
+      if (globalIndex < offset + segLen) return _segments[i].chapterIndex;
+      offset += segLen;
     }
     return _segments.last.chapterIndex;
   }
 
-  /// Find the first global page index for a chapter.
   int _globalPageForChapter(int chIdx) {
     int offset = 0;
     for (int i = 0; i < _segments.length; i++) {
       if (_segments[i].chapterIndex == chIdx) return offset;
-      offset += _segments[i].pagePaths.length + 1; // +1 for separator
+      offset += _segments[i].pagePaths.length;
     }
     return 0;
   }
 
-  /// Get the local page index within a chapter.
   int _localPageForGlobal(int globalIndex) {
     int offset = 0;
     for (int i = 0; i < _segments.length; i++) {
       final segLen = _segments[i].pagePaths.length;
-      if (globalIndex < offset + segLen) {
-        return globalIndex - offset;
-      }
-      offset += segLen + 1; // +1 for separator
+      if (globalIndex < offset + segLen) return globalIndex - offset;
+      offset += segLen;
     }
     return 0;
   }
 
-  // ── Scroll handling ──
+  // ── Scroll ──
 
   void _onScroll() {
     if (!_scrollController.hasClients) return;
     if (_screenHeight <= 0) return;
     final page = (_scrollController.offset / _screenHeight).round();
     if (page != _globalPage && page >= 0 && page < _displayItems.length) {
-      final item = _displayItems[page];
-      if (item is String && item != _sep) {
-        _globalPage = page;
-        final chIdx = _chapterIdxForGlobal(page);
-        if (chIdx != _currentChapterIdx) {
-          _currentChapterIdx = chIdx;
-          _updateChapterLabel();
-        }
-        _debouncedSave();
+      _globalPage = page;
+      final chIdx = _chapterIdxForGlobal(page);
+      if (chIdx != _currentChapterIdx) {
+        _currentChapterIdx = chIdx;
+        setState(() {});
       }
+      _debouncedSave();
     }
-
-    // Preload more chapters when near boundaries
     _checkPreload();
   }
 
-  void _updateChapterLabel() {
-    // Trigger rebuild to update the top bar chapter name
-    setState(() {});
+  void _scrollToGlobalPage(int page) {
+    if (!_scrollController.hasClients) return;
+    if (_screenHeight <= 0) return;
+    final target = page * _screenHeight;
+    final maxExtent = _scrollController.position.maxScrollExtent;
+    if (target <= maxExtent) {
+      _scrollController.jumpTo(target);
+    }
   }
+
+  // ── Preload ──
+
+  bool _loadingSegment = false;
 
   void _checkPreload() {
     if (!_scrollController.hasClients) return;
     final maxScroll = _scrollController.position.maxScrollExtent;
     final offset = _scrollController.offset;
 
-    // Near the end → load next chapter if available
     if (maxScroll > 0 && offset >= maxScroll - _screenHeight * 2) {
       _loadNextSegmentIfNeeded();
     }
-
-    // Near the beginning → load previous chapter if available
     if (offset <= _screenHeight * 2) {
       _loadPrevSegmentIfNeeded();
     }
   }
-
-  bool _loadingSegment = false;
 
   Future<void> _loadNextSegmentIfNeeded() async {
     if (_loadingSegment) return;
@@ -274,14 +258,7 @@ class _ReaderPageState extends State<ReaderPage> {
     final newSeg = await _buildSegment(nextCh);
     if (!mounted) { _loadingSegment = false; return; }
 
-    // Remove oldest segment if we have too many
-    if (_segments.length > 3) {
-      final removedFirst = _segments.removeAt(0);
-      for (final c in _transformControllers.keys.toList()) {
-        if (c >= _displayItems.length) _transformControllers.remove(c);
-      }
-    }
-
+    if (_segments.length > 3) _segments.removeAt(0);
     _segments.add(newSeg);
     _rebuildDisplayItems();
     setState(() {});
@@ -298,18 +275,13 @@ class _ReaderPageState extends State<ReaderPage> {
     final newSeg = await _buildSegment(prevCh);
     if (!mounted) { _loadingSegment = false; return; }
 
-    // Remove last segment if too many
-    if (_segments.length > 3) {
-      _segments.removeLast();
-    }
-
     final oldFirstGlobal = _globalPageForChapter(firstSeg.chapterIndex);
+    if (_segments.length > 3) _segments.removeLast();
     _segments.insert(0, newSeg);
     _rebuildDisplayItems();
     final newFirstGlobal = _globalPageForChapter(firstSeg.chapterIndex);
     final delta = newFirstGlobal - oldFirstGlobal;
 
-    // Adjust scroll position to compensate for prepended content
     if (_scrollController.hasClients && delta > 0) {
       final newOffset = _scrollController.offset + delta * _screenHeight;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -324,17 +296,7 @@ class _ReaderPageState extends State<ReaderPage> {
     _loadingSegment = false;
   }
 
-  void _scrollToGlobalPage(int page) {
-    if (!_scrollController.hasClients) return;
-    if (_screenHeight <= 0) return;
-    final target = page * _screenHeight;
-    final maxExtent = _scrollController.position.maxScrollExtent;
-    if (target <= maxExtent) {
-      _scrollController.jumpTo(target);
-    }
-  }
-
-  // ── Chapter info for UI ──
+  // ── Chapter info ──
 
   int get _currentLocalPage => _localPageForGlobal(_globalPage);
   int get _currentChapterPageCount => _chapters[_currentChapterIdx].pageCount;
@@ -478,16 +440,13 @@ class _ReaderPageState extends State<ReaderPage> {
       addRepaintBoundaries: true,
       addAutomaticKeepAlives: false,
       itemBuilder: (context, index) {
-        final item = _displayItems[index];
-        if (item == _sep) return _buildSeparator(sh);
-
         return InteractiveViewer(
           transformationController: _controllerFor(index),
           minScale: 0.5,
           maxScale: 4.0,
           child: Center(
             child: Image.file(
-              File(item as String),
+              File(_displayItems[index]),
               fit: BoxFit.contain,
               width: double.infinity,
               height: sh,
@@ -498,26 +457,6 @@ class _ReaderPageState extends State<ReaderPage> {
           ),
         );
       },
-    );
-  }
-
-  Widget _buildSeparator(double screenHeight) {
-    // Find which chapter comes after this separator
-    return Container(
-      width: double.infinity,
-      height: screenHeight,
-      color: Colors.black87,
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.arrow_downward, color: Colors.white38, size: 48),
-            const SizedBox(height: 16),
-            const Text('— 下一章 —',
-                style: TextStyle(color: Colors.white38, fontSize: 18)),
-          ],
-        ),
-      ),
     );
   }
 

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:neko/model/comic.dart';
 import 'package:neko/object_box/object_box.dart';
@@ -14,17 +15,38 @@ class CollectionDetailPage extends StatefulWidget {
   State<CollectionDetailPage> createState() => _CollectionDetailPageState();
 }
 
-class _CollectionDetailPageState extends State<CollectionDetailPage> {
+class _CollectionDetailPageState extends State<CollectionDetailPage>
+    with SingleTickerProviderStateMixin {
   List<Comic> _comics = [];
   Comic? _draggedComic;
   bool _overDeleteZone = false;
   bool _overRemoveZone = false;
+  int? _hoveredIndex;
   FavoriteCollection get _col => widget.collection;
+
+  late AnimationController _wobbleCtrl;
+  late Animation<double> _wobbleAnim;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _wobbleCtrl = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+    _wobbleAnim = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0, end: 0.08), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 0.08, end: -0.06), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: -0.06, end: 0.04), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 0.04, end: 0), weight: 1),
+    ]).animate(CurvedAnimation(parent: _wobbleCtrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _wobbleCtrl.dispose();
+    super.dispose();
   }
 
   void _load() {
@@ -96,31 +118,41 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
   }
 
   void _onDragStarted(Comic comic) {
-    setState(() => _draggedComic = comic);
+    _wobbleCtrl.forward(from: 0);
+    setState(() {
+      _draggedComic = comic;
+      _hoveredIndex = _comics.indexOf(comic);
+    });
   }
 
   void _onDragEnded() {
+    _wobbleCtrl.reset();
     setState(() {
       _draggedComic = null;
       _overDeleteZone = false;
       _overRemoveZone = false;
+      _hoveredIndex = null;
     });
   }
 
   void _onDeleteAccept(Comic comic) {
+    _wobbleCtrl.reset();
     setState(() {
       _draggedComic = null;
       _overDeleteZone = false;
       _overRemoveZone = false;
+      _hoveredIndex = null;
     });
     _deleteComic(comic);
   }
 
   void _onRemoveAccept(Comic comic) {
+    _wobbleCtrl.reset();
     setState(() {
       _draggedComic = null;
       _overDeleteZone = false;
       _overRemoveZone = false;
+      _hoveredIndex = null;
     });
     _removeFromCollection(comic);
   }
@@ -288,13 +320,11 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
                 )
               : _buildDraggableGrid(),
 
-          // Drag action zones — remove from collection + delete
           if (isDragging)
             Positioned(
               bottom: 0, left: 0, right: 0,
               child: Row(
                 children: [
-                  // Remove from collection zone (orange)
                   Expanded(
                     child: DragTarget<Comic>(
                       onWillAcceptWithDetails: (_) {
@@ -314,7 +344,7 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
                               Icon(Icons.remove_circle_outline, color: Colors.white,
                                   size: _overRemoveZone ? 36 : 28),
                               const SizedBox(width: 4),
-                              Text(_overRemoveZone ? '松开移出收藏' : '移出收藏',
+                              Text(_overRemoveZone ? '松开移出' : '移出收藏',
                                   style: const TextStyle(color: Colors.white, fontSize: 13)),
                             ],
                           ),
@@ -322,7 +352,6 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
                       },
                     ),
                   ),
-                  // Delete zone (red)
                   Expanded(
                     child: DragTarget<Comic>(
                       onWillAcceptWithDetails: (_) {
@@ -366,58 +395,93 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
 
   Widget _buildDraggableGrid() {
     return SafeArea(
-      child: GridView.builder(
-        padding: const EdgeInsets.all(12),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 0.72,
-        ),
-        itemCount: _comics.length,
-        itemBuilder: (context, index) {
-          final comic = _comics[index];
-          final isDragged = _draggedComic?.comicId == comic.comicId;
-
-          final card = ComicCardWidget(
-            key: ValueKey('card_${comic.comicId}'),
-            comic: comic,
-            onTap: () => _openComic(comic),
-            onLongPress: isDragged ? null : () {},
-            isDragged: isDragged,
-          );
-
-          return LongPressDraggable<Comic>(
-            key: ValueKey('drag_${comic.comicId}'),
-            data: comic,
-            delay: const Duration(milliseconds: 300),
-            hapticFeedbackOnStart: true,
-            onDragStarted: () => _onDragStarted(comic),
-            onDragEnd: (_) => _onDragEnded(),
-            onDraggableCanceled: (_, __) => _onDragEnded(),
-            feedback: SizedBox(
-              width: 120, height: 167,
-              child: Material(elevation: 8, borderRadius: BorderRadius.circular(8), child: card),
+      child: AnimatedBuilder(
+        animation: _wobbleAnim,
+        builder: (context, child) {
+          return GridView.builder(
+            padding: const EdgeInsets.all(12),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 0.72,
             ),
-            childWhenDragging: Opacity(opacity: 0.3, child: card),
-            child: DragTarget<Comic>(
-              onWillAcceptWithDetails: (details) {
-                return details.data.comicId != comic.comicId;
-              },
-              onAcceptWithDetails: (details) {
-                final fromIndex = _comics.indexOf(details.data);
-                _swapComics(fromIndex, index);
-              },
-              builder: (context, candidates, rejected) {
-                return candidates.isNotEmpty
-                    ? Card(
-                        clipBehavior: Clip.antiAlias,
-                        color: Theme.of(context).colorScheme.primary.withAlpha(40),
-                        child: const Center(child: Icon(Icons.swap_horiz, size: 32)),
-                      )
-                    : card;
-              },
-            ),
+            itemCount: _comics.length,
+            itemBuilder: (context, index) {
+              final comic = _comics[index];
+              final isDragged = _draggedComic?.comicId == comic.comicId;
+              final isHovered = _hoveredIndex == index && !isDragged;
+
+              final card = ComicCardWidget(
+                comic: comic,
+                onTap: () => _openComic(comic),
+                onLongPress: isDragged ? null : () {},
+                isDragged: isDragged,
+              );
+
+              Widget content = isDragged
+                  ? Transform.rotate(angle: _wobbleAnim.value, child: card)
+                  : card;
+
+              if (isHovered) {
+                content = Transform.translate(
+                  offset: Offset(math.sin(_wobbleAnim.value * 20) * 8, 0),
+                  child: content,
+                );
+              }
+
+              return LongPressDraggable<Comic>(
+                key: ValueKey('drag_${comic.comicId}'),
+                data: comic,
+                delay: const Duration(milliseconds: 300),
+                hapticFeedbackOnStart: true,
+                onDragStarted: () => _onDragStarted(comic),
+                onDragEnd: (_) => _onDragEnded(),
+                onDraggableCanceled: (_, __) => _onDragEnded(),
+                feedback: SizedBox(
+                  width: 120, height: 167,
+                  child: Material(
+                    elevation: 8,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Transform.rotate(angle: 0.05, child: card),
+                  ),
+                ),
+                childWhenDragging: Opacity(opacity: 0.2, child: card),
+                child: DragTarget<Comic>(
+                  onWillAcceptWithDetails: (details) {
+                    if (details.data.comicId == comic.comicId) return false;
+                    setState(() => _hoveredIndex = index);
+                    return true;
+                  },
+                  onLeave: (_) {},
+                  onAcceptWithDetails: (details) {
+                    final fromIndex = _comics.indexOf(details.data);
+                    _swapComics(fromIndex, index);
+                    _onDragEnded();
+                  },
+                  builder: (context, candidates, rejected) {
+                    final hasCandidate = candidates.isNotEmpty;
+                    return AnimatedScale(
+                      duration: const Duration(milliseconds: 150),
+                      scale: hasCandidate ? 1.08 : 1.0,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        decoration: hasCandidate
+                            ? BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  width: 2,
+                                ),
+                              )
+                            : null,
+                        child: content,
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
           );
         },
       ),

@@ -78,8 +78,9 @@ class _CollectionsPageState extends State<CollectionsPage> {
   @override
   Widget build(BuildContext context) {
     if (_collections.isEmpty) {
-      return Center(
-        child: Column(
+      return SafeArea(
+        child: Center(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.favorite_outline,
@@ -98,10 +99,12 @@ class _CollectionsPageState extends State<CollectionsPage> {
                     ?.copyWith(color: Theme.of(context).colorScheme.outline)),
           ],
         ),
+        ),
       );
     }
 
-    return GridView.builder(
+    return SafeArea(
+      child: GridView.builder(
       padding: const EdgeInsets.all(12),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
@@ -132,6 +135,7 @@ class _CollectionsPageState extends State<CollectionsPage> {
           ),
         );
       },
+    ),
     );
   }
 
